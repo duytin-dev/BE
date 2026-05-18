@@ -30,7 +30,7 @@ public class GeminiServiceImpl implements GeminiService {
 
 	public GeminiServiceImpl(
 			@Value("${gemini.api.key:}") String apiKey,
-			@Value("${gemini.model:gemini-2.0-flash}") String model) {
+			@Value("${gemini.model:gemini-1.5-flash}") String model) {
 		this.apiKey = apiKey;
 		this.model = model;
 	}
