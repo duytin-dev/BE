@@ -1,22 +1,73 @@
 # Hướng dẫn deploy lên Render (free)
 
-Stack: **Spring Boot** trên Render + **PostgreSQL** trên Neon (free).
+Stack: **Spring Boot** trên Render + **PostgreSQL** (Render hoặc Neon).
 
 ---
 
 ## Tổng quan
 
 ```
-GitHub repo  →  Render (Docker, chạy app)
+GitHub repo  →  Render Web Service (Docker)
                     ↓
-              Neon PostgreSQL (database cloud)
+              PostgreSQL (Render hoặc Neon)
 ```
 
-Render **không** chạy `docker-compose` — chỉ deploy **app**. Database dùng Neon.
+Render **không** chạy `docker-compose` — chỉ deploy **app**.
 
 ---
 
-## Bước 1: Tạo database trên Neon
+## Lỗi `Unknown host dpg-xxxxx-a`
+
+Hostname `dpg-d85b5np9rddc73a6qr70-a` **chưa đủ** để resolve DNS nếu bạn chạy app **ngoài Render** (IDE, máy local). Cần hostname **đầy đủ** có domain, ví dụ:
+
+```text
+dpg-d85b5np9rddc73a6qr70-a.singapore-postgres.render.com
+```
+
+| Bạn chạy backend ở đâu | Dùng connection trên Render Dashboard |
+|------------------------|----------------------------------------|
+| **Web Service trên Render** (cùng region với DB) | **Internal Database URL** → JDBC bên dưới |
+| **Local / IntelliJ** | **External Database URL** (có `.region-postgres.render.com`) + `?sslmode=require` |
+
+**JDBC đúng cho Spring Boot** (user/password **tách** — không nhét vào URL):
+
+```text
+# Internal (chỉ từ service Render khác)
+jdbc:postgresql://dpg-XXXX-a:5432/<TEN_DB>
+
+# External (từ máy bạn / mọi nơi)
+jdbc:postgresql://dpg-XXXX-a.<region>-postgres.render.com:5432/<TEN_DB>?sslmode=require
+```
+
+Trên Render → Web Service → **Environment**:
+
+| Key | Value |
+|-----|--------|
+| `SPRING_DATASOURCE_URL` | JDBC như trên (copy host từ Dashboard, **không** thêm user:pass vào URL) |
+| `SPRING_DATASOURCE_USERNAME` | user DB (vd `demo_ktpm_user`) |
+| `SPRING_DATASOURCE_PASSWORD` | password từ Dashboard |
+
+Sau khi sửa: **Save** → **Clear build cache** (nếu cần) → redeploy. Kiểm tra không có **dấu cách** thừa cuối URL.
+
+---
+
+## Bước 1A: Database trên Render (PostgreSQL)
+
+1. Dashboard → **New +** → **PostgreSQL** → tạo DB free.
+2. Vào DB → **Connections** → copy **Internal** (cho Web Service) hoặc **External** (cho local).
+3. Chuyển sang JDBC + set 3 biến env như bảng trên.
+
+Ví dụ Internal:
+
+```text
+SPRING_DATASOURCE_URL=jdbc:postgresql://dpg-d85b5np9rddc73a6qr70-a:5432/demo_ktpm
+SPRING_DATASOURCE_USERNAME=demo_ktpm_user
+SPRING_DATASOURCE_PASSWORD=<password từ Render>
+```
+
+---
+
+## Bước 1B: Database trên Neon (tùy chọn)
 
 1. Vào https://neon.tech → **Sign up** / đăng nhập.
 2. **New Project** → đặt tên (vd: `demo-ktpm`).
