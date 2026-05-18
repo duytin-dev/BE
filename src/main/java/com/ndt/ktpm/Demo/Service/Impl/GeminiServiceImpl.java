@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.ndt.ktpm.Demo.Exception.GeminiUpstreamException;
 import com.ndt.ktpm.Demo.Service.GeminiService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -14,9 +15,14 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class GeminiServiceImpl implements GeminiService {
+
+	private static final String LIST_MODELS_URL =
+			"https://generativelanguage.googleapis.com/v1beta/models?key=%s&pageSize=100";
 
 	private static final String GEMINI_URL_TEMPLATE =
 			"https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s";
@@ -30,7 +36,7 @@ public class GeminiServiceImpl implements GeminiService {
 
 	public GeminiServiceImpl(
 			@Value("${gemini.api.key:}") String apiKey,
-			@Value("${gemini.model:gemini-1.5-flash}") String model) {
+			@Value("${gemini.model:gemini-2.0-flash}") String model) {
 		this.apiKey = apiKey;
 		this.model = model;
 	}
@@ -68,7 +74,7 @@ public class GeminiServiceImpl implements GeminiService {
 
 			if (response.statusCode() != 200) {
 				String err = root.path("error").path("message").asText(response.body());
-				throw new IllegalStateException("Gemini HTTP " + response.statusCode() + ": " + err);
+				throw new GeminiUpstreamException(response.statusCode(), "Gemini HTTP " + response.statusCode() + ": " + err);
 			}
 
 			JsonNode candidates = root.path("candidates");
@@ -85,6 +91,57 @@ public class GeminiServiceImpl implements GeminiService {
 			throw e;
 		} catch (Exception e) {
 			throw new IllegalStateException("Lỗi gọi Gemini: " + e.getMessage(), e);
+		}
+	}
+
+	@Override
+	public List<String> listGenerateContentModelIds() {
+		if (apiKey == null || apiKey.isBlank()) {
+			throw new IllegalStateException("Chưa cấu hình GEMINI_API_KEY trên server.");
+		}
+		String uri = String.format(LIST_MODELS_URL, apiKey);
+		try {
+			HttpRequest request = HttpRequest.newBuilder()
+					.uri(URI.create(uri))
+					.timeout(Duration.ofSeconds(60))
+					.GET()
+					.build();
+			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+			JsonNode root = objectMapper.readTree(response.body());
+			if (response.statusCode() != 200) {
+				String err = root.path("error").path("message").asText(response.body());
+				throw new GeminiUpstreamException(response.statusCode(), "Gemini HTTP " + response.statusCode() + ": " + err);
+			}
+			List<String> out = new ArrayList<>();
+			JsonNode models = root.path("models");
+			if (!models.isArray()) {
+				return out;
+			}
+			for (JsonNode m : models) {
+				JsonNode methods = m.path("supportedGenerationMethods");
+				if (!methods.isArray()) {
+					continue;
+				}
+				boolean supports = false;
+				for (JsonNode g : methods) {
+					if ("generateContent".equals(g.asText())) {
+						supports = true;
+						break;
+					}
+				}
+				if (!supports) {
+					continue;
+				}
+				String name = m.path("name").asText("");
+				if (name.startsWith("models/")) {
+					out.add(name.substring("models/".length()));
+				}
+			}
+			return out;
+		} catch (GeminiUpstreamException e) {
+			throw e;
+		} catch (Exception e) {
+			throw new IllegalStateException("Lỗi liệt kê model Gemini: " + e.getMessage(), e);
 		}
 	}
 }
