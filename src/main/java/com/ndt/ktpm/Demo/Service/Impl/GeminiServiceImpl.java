@@ -23,18 +23,16 @@ public class GeminiServiceImpl implements GeminiService {
 
 	private final String apiKey;
 	private final String model;
-	private final ObjectMapper objectMapper;
+	private final ObjectMapper objectMapper = new ObjectMapper();
 	private final HttpClient httpClient = HttpClient.newBuilder()
 			.connectTimeout(Duration.ofSeconds(20))
 			.build();
 
 	public GeminiServiceImpl(
 			@Value("${gemini.api.key:}") String apiKey,
-			@Value("${gemini.model:gemini-2.0-flash}") String model,
-			ObjectMapper objectMapper) {
+			@Value("${gemini.model:gemini-2.0-flash}") String model) {
 		this.apiKey = apiKey;
 		this.model = model;
-		this.objectMapper = objectMapper;
 	}
 
 	@Override
